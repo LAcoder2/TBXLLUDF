@@ -1,11 +1,14 @@
 Module ExcelSDK
+Public Enum BOOL
+    xlTrue
+    xlFasle
+End Enum
 Public Type POINT 'Not needed if WinDevLib present
     x As Long
     y As Long
 End Type
 #Region "xlcall.h"
-'100% coverage
-    
+'100% coverage    
 Public Type XLREF
     rwFirst As Integer
     rwLast As Integer
@@ -19,13 +22,10 @@ End Type
 ** This is a variable size structure, default 
 ** size is 1 reference.
 */
-
 Public Type XLMREF
     count As Integer
     reftbl(1023) As XLREF /* actually reftbl[count] */
 End Type
-    
-    
 Public Type XLREF12
     rwFirst As Long
     rwLast As Long
@@ -34,38 +34,108 @@ Public Type XLREF12
 End Type
 Public Type XLMREF12
     count As Integer
-    reftbl(1023) As XLREF12 /* actually reftbl[count] */
+    reftbl(1023) As XLREF12 '/* actually reftbl[count] */
 End Type
-    
+Public Type XL12SRef    'single Ref - одна ссылка диапазона
+    count As Long       '/* always = 1 */
+    ref As XLREF12
+    unuse As Long
+    xltype As XloperTypes
+    padding As Long 'for x86
+End Type
+Public Type XL12Ref
+    pMref As LongPtr
+    idSheet As LongPtr
+  #If Win32 Then
+    lunuse(2) As Long
+  #End If
+    TmpRefs() As XLREF12    'mem buffer for temporary data (ref-array)
+    xltype As XloperTypes
+    padding As Long
+End Type
 Public Type FP
     rows As Integer
     columns As Integer
     ' double array[1];        /* Actually, array[rows][columns] -- array[columns][rows]*/
 End Type
-    
-Public Type FP12
+Public Type FP12              'array of floating-point
     rows As Long
     columns As Long
     ' double array[1];        /* Actually, array[rows][columns] -- array[columns][rows]*/
 End Type
-    
-Public Enum XloperTypes
-    xltypeNum = &H0001
-    xltypeStr = &H0002
-    xltypeBool = &H0004
-    xltypeRef = &H0008
-    xltypeErr = &H0010
-    xltypeFlow = &H0020
-    xltypeMulti = &H0040
-    xltypeMissing = &H0080
-    xltypeNil = &H0100
-    xltypeSRef = &H0400
-    xltypeInt = &H0800
-    xlbitXLFree = &H1000
-    xlbitDLLFree = &H4000
-    xltypeBigData = (xltypeStr Or xltypeInt)
-End Enum
-    
+Public Type XL12Multi
+    pData As LongPtr            'указатель на данные массива XLOPER12
+    rows As Long
+    columns As Long
+  #If Win32 Then
+    cunuse As Long
+  #End If
+    bBuf As String            'буфер для временных данных
+    xltype As XloperTypes
+    padding As Long 'for x86
+End Type
+Public Type XL12Num           'Double
+    dVal As Double
+    cunuse(1) As Currency
+    xltype As XloperTypes '24
+    padding As Long
+End Type
+Public Type XL12Int
+    lVal As Long
+    lunuse(4) As Long
+    xltype As XloperTypes
+    padding As Long
+End Type
+Public Type XL12BOOL
+    blVal As BOOL
+    lunuse(4) As Long
+    xltype As XloperTypes
+    padding As Long
+End Type
+Public Type XL12Ptr
+    ptr As LongPtr
+  #If Win64 Then
+    cunuse As Currency
+  #Else
+    cunuse(1) As Currency
+  #End If
+    bTmpBuf() As Byte
+    xltype As XloperTypes
+    padding As Long 'for x86
+End Type
+Public Type XL12Str
+    Str As String
+  #If Win64 Then
+    lunuse(3) As Long
+  #Else
+    lunuse(4) As Long
+  #End If
+    xltype As XloperTypes
+    padding As Long 'for x86
+End Type
+' struct
+' {
+    ' union
+    ' {
+        ' BYTE *lpbData;                '/* data passed to XL */
+        ' HANDLE hdata;                 '/* data returned from XL */
+    ' } h;
+    ' long cbData;
+' } bigdata;                            '/* xltypeBigData */
+Public Type BIGDATA
+    lpbData As LongPtr ' /hData As LongPtr
+    cbData As Long
+End Type
+Public Type XL12BigData
+    BD As BIGDATA
+  #If Win64 Then
+    lunuse(2) As Long
+  #Else
+    lunuse(3) As Long
+  #End If
+    xltype As XloperTypes
+    padding As Long
+End Type
 Public Type XLOPER
     #If Win64 Then
     val(1) As LongLong 'for 8 byte alignment
@@ -123,8 +193,6 @@ Public Type XLOPER
         ' } bigdata;                    /* xltypeBigData */
     ' } val;
         
-        
-        
     /* [TypeHint(XloperTypes)] */ xltype As Integer
 End Type
 Public Type XLOPER12
@@ -133,50 +201,67 @@ Public Type XLOPER12
         ' double num;                           /* xltypeNum */
         ' XCHAR *str;                           /* xltypeStr */
         ' BOOL xbool;                           /* xltypeBool */
-        ' int err;                           /* xltypeErr */
+        ' int err;                              /* xltypeErr */
         ' int w;
         ' struct 
         ' {
             ' WORD count;                       /* always = 1 */
             ' XLREF12 ref;
-        ' } sref;                        /* xltypeSRef */
+        ' } sref;                               /* xltypeSRef */
         ' struct 
         ' {
             ' XLMREF12 *lpmref;
             ' IDSHEET idSheet;
-        ' } mref;                        /* xltypeRef */
+        ' } mref;                               /* xltypeRef */
         ' struct 
         ' {
             ' struct xloper12 *lparray;
             ' RW rows;
             ' COL columns;
-        ' } array;                    /* xltypeMulti */
+        ' } array;                              /* xltypeMulti */
         ' struct 
         ' {
             ' union
             ' {
-                ' int level;            /* xlflowRestart */
-                ' int tbctrl;            /* xlflowPause */
-                ' IDSHEET idSheet;        /* xlflowGoto */
+                ' int level;                    /* xlflowRestart */
+                ' int tbctrl;                   /* xlflowPause */
+                ' IDSHEET idSheet;              /* xlflowGoto */
             ' } valflow;
-            ' RW rw;                           /* xlflowGoto */
-            ' COL col;                       /* xlflowGoto */
+            ' RW rw;                            /* xlflowGoto */
+            ' COL col;                          /* xlflowGoto */
             ' BYTE xlflow;
-        ' } flow;                        /* xltypeFlow */
+        ' } flow;                               /* xltypeFlow */
         ' struct
         ' {
             ' union
             ' {
-                ' BYTE *lpbData;            /* data passed to XL */
-                ' HANDLE hdata;            /* data returned from XL */
+                ' BYTE *lpbData;                /* data passed to XL */
+                ' HANDLE hdata;                 /* data returned from XL */
             ' } h;
             ' long cbData;
-        ' } bigdata;                    /* xltypeBigData */
+        ' } bigdata;                            /* xltypeBigData */
     ' } val;
     ' DWORD xltype;
     val(2) As LongLong 'for 8 byte alignment 
     xltype As XloperTypes
+    padding As Long 'this is necessary for a 32-bit environment, since the maximum alignment there is 4 bytes.
 End Type
+Public Enum XloperTypes
+    xltypeNum = &H0001       '(1);(233,343)
+    xltypeStr = &H0002       '("2")
+    xltypeBool = &H0004      '(ЛОЖЬ)
+    xltypeRef = &H0008
+    xltypeErr = &H0010      '16
+    xltypeFlow = &H0020
+    xltypeMulti = &H0040    '64 ({1,2,3})
+    xltypeMissing = &H0080  '128 ()
+    xltypeNil = &H0100
+    xltypeSRef = &H0400     '1024 (D4);(D2:D4)
+    xltypeInt = &H0800
+    xlbitXLFree = &H1000
+    xlbitDLLFree = &H4000
+    xltypeBigData = (xltypeStr Or xltypeInt)
+End Enum
 Public Enum XloperErrorCodes
     xlerrNull = 0
     xlerrDiv0 = 7
@@ -187,7 +272,6 @@ Public Enum XloperErrorCodes
     xlerrNA = 42
     xlerrGettingData = 43
 End Enum
-    
 Public Enum XloperFlowDataTypes
     xlflowHalt = 1
     xlflowGoto = 2
@@ -195,7 +279,6 @@ Public Enum XloperFlowDataTypes
     xlflowPause = 16
     xlflowResume = 64
 End Enum
-    
 Public Enum Excel4ReturnCodes
     xlretSuccess = 0 /* success */
     xlretAbort = 1 /* macro halted */
@@ -209,18 +292,23 @@ Public Enum Excel4ReturnCodes
     xlretInvAsynchronousContext = 256 /* invalid asynchronous function handle */
     xlretNotClusterSafe = 512 /* not supported on cluster */
 End Enum
-    
 Public Enum ExcelXllEvents
     xleventCalculationEnded = 1 /* Fires at the end of calculation */
     xleventCalculationCanceled = 2 /* Fires when calculation is interrupted */
 End Enum
-    
+Public xlEmpty As XLOPER, xlEmpty12 As XLOPER12
+Public xlNullString As Long ' 2 null wchar's
+
 ' int _cdecl Excel4(int xlfn, LPXLOPER operRes, int count,... ); 
+[UseGetLastError(False), DLLStackCheck(False)]
 Public Declare PtrSafe Function Excel4 CDecl Lib "XLCall32.dll" (ByVal xlfn As ExcelCommandNumbers, operRes As XLOPER, ByVal count As Long, ByVal ParamArray args As Any()) As Excel4ReturnCodes
 ' int pascal Excel4v(int xlfn, LPXLOPER operRes, int count, LPXLOPER opers[]);
+[UseGetLastError(False), DLLStackCheck(False)]
 Public Declare PtrSafe Function Excel4v Lib "XLCall32.dll" (ByVal xlfn As ExcelCommandNumbers, operRes As XLOPER, ByVal count As Long, opers As XLOPER) As Excel4ReturnCodes
+[UseGetLastError(False), DLLStackCheck(False)]
 Public Declare PtrSafe Function XLCallVer Lib "XLCall32.dll" () As Long
 ' long pascal LPenHelper(int wCode, VOID *lpv);
+[UseGetLastError(False), DLLStackCheck(False)]
 Public Declare PtrSafe Function LPenHelper Lib "XLCall32.dll" (ByVal wCode As Long, lpv As Any) As Long
     
 ' int _cdecl Excel12(int xlfn, LPXLOPER12 operRes, int count,... );
@@ -237,8 +325,6 @@ Public Enum ExcelClusterConReturnCodes
     xlHpcRetSessionIdInvalid = -1
     xlHpcRetCallFailed = -2
 End Enum
-    
-    
 Public Enum ExcelCallbackFunctionNumbers
     xlCommand = &H8000&
     xlSpecial = &H4000
@@ -266,14 +352,12 @@ Public Enum ExcelCallbackFunctionNumbers
     xlRunningOnCluster = (18 Or xlSpecial) /*Returns true if running on Compute Cluster*/
     xlGetInstPtr = (19 Or xlSpecial) /* Returns application's hinstance as a handle, supported on both 32-bit and 64-bit platforms */
 End Enum
-    
 Public Enum ExcelEditModes
     xlModeReady = 0  ' not in edit mode
     xlModeEnter = 1  ' enter mode
     xlModeEdit = 2  ' edit mode
     xlModePoint = 4  ' point mode
 End Enum
-    
 Public Enum ExcelDocTypes
     dtNil = &H7f  ' window is not a sheet, macro, chart or basic
 '  OR window is not the selected window at idle state
@@ -282,7 +366,6 @@ Public Enum ExcelDocTypes
     dtChart = 2  ' Chart
     dtBasic = 6  ' VBA
 End Enum
-    
 Public Enum ExcelHitTestCodes
     htNone = &H00  ' none of below
     htClient = &H01  ' internal for "in the client are", should never see
@@ -322,29 +405,22 @@ Public Enum ExcelHitTestCodes
     htTabs = &H21  ' the sheet paging tabs
     htEdit = &H22  ' Internal use only
 End Enum
-    
 Public Type FMLAINFO
-    wPointMode As Long ' current edit mode.  0 => rest of struct undefined
-    cch As Long ' count of characters in formula
-    lpch As LongPtr 'char* ' pointer to formula characters.  READ ONLY!!!
-    ichFirst As Long ' char offset to start of selection
-    ichLast As Long ' char offset to end of selection (may be > cch)
-    ichCaret As Long ' char offset to blinking caret
+    wPointMode As Long  ' current edit mode.  0 => rest of struct undefined
+    cch As Long         ' count of characters in formula
+    lpch As LongPtr     'char* ' pointer to formula characters.  READ ONLY!!!
+    ichFirst As Long    ' char offset to start of selection
+    ichLast As Long     ' char offset to end of selection (may be > cch)
+    ichCaret As Long    ' char offset to blinking caret
 End Type
-    
 Public Type MOUSEINFO
-    /* input section */
-    hwnd As LongPtr ' window to get info on
-    pt As POINT ' mouse position to get info on
-    /* output section */
-    dt As Long ' document(page) type
-    ht As Long ' hit test code
-    rw As Long ' row @ mouse (-1 if #n/a)
-    col As Long ' col @ mouse (-1 if #n/a)
+    hwnd As LongPtr ' window to get info on     /* input section */
+    pt As POINT     ' mouse position to get info on
+    dt As Long      ' document(page) type       /* output section */
+    ht As Long      ' hit test code
+    rw As Long      ' row @ mouse (-1 if #n/a)
+    col As Long     ' col @ mouse (-1 if #n/a)
 End Type
-    
-    
-    
 Public Enum ExcelFunctionNumbers
     xlUDF = 255
     xlfCount = 0
@@ -1333,388 +1409,4 @@ Public Enum ExcelCommandNumbers
     xlcHideallInkannots = (808 Or xlCommand)
 End Enum
 #End Region
-    
-
-#Region "XLCALL.CPP"
-/*
-**  Microsoft Excel Developer's Toolkit
-**  Version 14.0
-**
-**  File:           SRC\XLCALL.CPP
-**  Description:    Code file for Excel callbacks
-**  Platform:       Microsoft Windows
-**
-**  This file defines the entry points 
-**  which are used in the Microsoft Excel C API.
-**
-*/
-
-' #ifndef _WINDOWS_
-' #include <windows.h>
-' #endif
-Private Declare PtrSafe Function GetModuleHandleW Lib "kernel32" (Optional ByVal lpModuleName As LongPtr) As LongPtr
-Private Declare PtrSafe Function GetProcAddress Lib "kernel32" (ByVal hModule As LongPtr, ByVal lpProcName As String) As LongPtr
-
-' #include "xlcall.h"
-
-/*
-** Excel 12 entry points backwards compatible with Excel 11
-**
-** Excel12 and Excel12v ensure backwards compatibility with Excel 11
-** and earlier versions. These functions will return xlretFailed when
-** used to callback into Excel 11 and earlier versions
-*/
-
-Public Const cxloper12Max = 255
-Public Const EXCEL12ENTRYPT = "MdCallBack12"
-
-' typedef int (PASCAL *EXCEL12PROC) (int xlfn, int coper, LPXLOPER12 *rgpxloper12, LPXLOPER12 xloper12Res);
-Private Delegate Function EXCEL12PROC (ByVal xlfn As ExcelCommandNumbers, ByVal coper As Long, rgpxloper12 As LongPtr, xloper12Res As XLOPER12) As Long
-' HMODULE hmodule;
-' EXCEL12PROC pexcel12;
-Private hmodule As LongPtr
-Private pexcel12 As EXCEL12PROC
-' __forceinline void FetchExcel12EntryPt(void)
-' {
-    ' if (pexcel12 == NULL)
-    ' {
-        ' hmodule = GetModuleHandle(NULL);
-        ' if (hmodule != NULL)
-        ' {
-            ' pexcel12 = (EXCEL12PROC) GetProcAddress(hmodule, EXCEL12ENTRYPT);
-        ' }
-    ' }
-' }
-Private Sub FetchExcel12EntryPt()
-    If pexcel12 = 0 Then
-        hmodule = GetModuleHandleW(0)
-        If hmodule <> 0 Then
-            pexcel12 = CType(Of EXCEL12PROC)(GetProcAddress(hmodule, EXCEL12ENTRYPT))
-        End If
-    End If
-End Sub
-' /*
-' ** This function explicitly sets EXCEL12ENTRYPT.
-' **
-' ** If the XLL is loaded not by Excel.exe, but by a HPC cluster container DLL,
-' ** then GetModuleHandle(NULL) would return the process EXE module handle.
-' ** In that case GetProcAddress would fail, since the process EXE doesn't
-' ** export EXCEL12ENTRYPT ( since it's not Excel.exe).
-' **
-' ** First try to fetch the known good entry point,
-' ** then set the passed in address.
-' */
-' #ifdef __cplusplus
-' extern "C"
-' #endif    
-' __declspec(dllexport)
-' void pascal SetExcel12EntryPt(EXCEL12PROC pexcel12New)
-' {
-    ' FetchExcel12EntryPt();
-    ' if (pexcel12 == NULL)
-    ' {
-        ' pexcel12 = pexcel12New;
-    ' }
-' }
-[DllExport]
-Public Sub SetExcel12EntryPt(ByVal pexcel12New As EXCEL12PROC)
-    FetchExcel12EntryPt()
-    If (pexcel12 = 0) Then
-        pexcel12 = pexcel12New
-    End If
-End Sub
-' int _cdecl Excel12(int xlfn, LPXLOPER12 operRes, int count, ...)
-' {
-
-    ' LPXLOPER12 rgxloper12[cxloper12Max];
-    ' va_list ap;
-    ' int ioper;
-    ' int mdRet;
-
-    ' FetchExcel12EntryPt();
-    ' if (pexcel12 == NULL)
-    ' {
-        ' mdRet = xlretFailed;
-    ' }
-    ' else
-    ' {
-        ' mdRet = xlretInvCount;
-        ' if ((count >= 0)  && (count <= cxloper12Max))
-        ' {
-            ' va_start(ap, count);
-            ' for (ioper = 0; ioper < count ; ioper++)
-            ' {
-                ' rgxloper12[ioper] = va_arg(ap, LPXLOPER12);
-            ' }
-            ' va_end(ap);
-            ' mdRet = (pexcel12)(xlfn, count, &rgxloper12[0], operRes);
-        ' }
-    ' }
-    ' return(mdRet);
-    
-' }
-[Unimplemented]
-[Description("TEMPORARY - tB cannot currently put UDTs in Variants so no ParamArray.\" & vbCrLf & "Use Excel12v instead.")]
-Public Function Excel12(ByVal xlfn As ExcelCommandNumbers, operRes As XLOPER12, ByVal count As Long, ParamArray opers() As Variant) As Excel4ReturnCodes
-    ' Dim rgxloper12() As XLOPER12
-    Dim mdRet As Excel4ReturnCodes
-    ' FetchExcel12EntryPt()
-    ' If (pexcel12 = 0) Then
-        mdRet = xlretFailed
-    ' Else
-    '     mdRet = xlretInvCount
-    '     If ((count >= 0) And (count <= cxloper12Max)) Then
-    '         ReDim rgxloper12(count - 1)
-    '         Dim ioper As Long
-    '         For ioper = 0 To UBound(opers)
-    '             rgxloper12(ioper) = opers(ioper)
-    '             mdRet = (pexcel12)(xlfn, count, VarPtr(rgxloper12(0)), operRes)
-    '         Next
-    '     End If
-    ' End If
-    Return mdRet
-End Function
-    
-' int pascal Excel12v(int xlfn, LPXLOPER12 operRes, int count, LPXLOPER12 opers[])
-' {
-
-    ' int mdRet;
-
-    ' FetchExcel12EntryPt();
-    ' if (pexcel12 == NULL)
-    ' {
-        ' mdRet = xlretFailed;
-    ' }
-    ' else
-    ' {
-        ' mdRet = (pexcel12)(xlfn, count, &opers[0], operRes);
-    ' }
-    ' return(mdRet);
-
-' }
-Public Function Excel12v(ByVal xlfn As ExcelCommandNumbers, operRes As XLOPER12, ByVal count As Long, opers() As XLOPER12) As Excel4ReturnCodes
-    Dim mdRet As Excel4ReturnCodes
-    FetchExcel12EntryPt()
-    If (pexcel12 = 0) Then
-        mdRet = xlretFailed
-    ElseIf count = 0 Then
-        mdRet = pexcel12(xlfn, count, ByVal 0, operRes)
-    Else
-        Dim ptrs() As LongPtr
-        ReDim ptrs(count - 1)
-        Dim i As Long
-        For i = 0 To count - 1
-            ptrs(i) = VarPtr(opers(i))
-        Next
-        
-        mdRet = pexcel12(xlfn, count, ptrs(0), operRes)
-    End If
-    Return mdRet
-End Function
-Public Function Excel12v(ByVal xlfn As ExcelCommandNumbers, operRes As XLOPER12, ByVal count As Long) As Excel4ReturnCodes
-    Dim mdRet As Excel4ReturnCodes
-    FetchExcel12EntryPt()
-    If (pexcel12 = 0) Then
-        mdRet = xlretFailed
-    ElseIf count = 0 Then
-        mdRet = pexcel12(xlfn, count, ByVal 0, operRes)
-    Else
-        mdRet = xlretFailed
-    End If
-    Return mdRet
-End Function
-
-#End Region
-' int cdecl Excel12f(int xlfn, LPXLOPER12 pxResult, int count, ...)
-' {
-    ' int xlret;
-    ' va_list ppxArgs;
- 
-    ' va_start(ppxArgs, count);
-    ' xlret = Excel12v(xlfn,pxResult,count,(LPXLOPER12 *)ppxArgs);
-    ' va_end(ppxArgs);
- 
-    ' FreeAllTempMemory();
-
-    ' return xlret;
-' }
-' LPXLOPER12 TempStr12(const XCHAR* lpstr)
-' {
-    ' LPXLOPER12 lpx;
-    ' XCHAR* lps;
-    ' int len;
-
-    ' len = lstrlenW(lpstr);
-
-    ' lpx = (LPXLOPER12) GetTempMemory(sizeof(XLOPER12) + (len+1)*2);
-
-    ' if (!lpx)
-    ' {
-        ' return 0;
-    ' }
-
-    ' lps = (XCHAR*)((CHAR*)lpx + sizeof(XLOPER12));
-
-    ' lps[0] = (BYTE)len;
-    ' //can't wcscpy_s because of removal of null-termination
-    ' wmemcpy_s( lps+1, len+1, lpstr, len);
-    ' lpx->xltype = xltypeStr;
-    ' lpx->val.str = lps;
-
-    ' return lpx;
-' }   
-
-
-Private Declare PtrSafe Sub CopyMemory Lib "kernel32" Alias "RtlMoveMemory" (Destination As Any, Source As Any, ByVal Length As LongPtr)
-Private Declare PtrSafe Sub ZeroMemory Lib "kernel32" Alias "RtlZeroMemory" (Destination As Any, ByVal Length As LongPtr)
-Private Declare PtrSafe Function SysReAllocStringW Lib "oleaut32" Alias "SysReAllocString" (ByVal pBSTR As LongPtr, Optional ByVal pszStrPtr As LongPtr) As Long
-Private Declare PtrSafe Function GlobalAlloc Lib "kernel32" (ByVal uFlags As GMEM, ByVal dwBytes As LongPtr) As LongPtr
-Private Enum GMEM
-    GMEM_FIXED = &H0000
-    GMEM_MOVEABLE = &H0002
-    GMEM_NOCOMPACT = &H0010
-    GMEM_NODISCARD = &H0020
-    GMEM_ZEROINIT = &H0040
-    GMEM_MODIFY = &H0080
-    GMEM_DISCARDABLE = &H0100
-    GMEM_NOT_BANKED = &H1000
-    GMEM_SHARE = &H2000
-    GMEM_DDESHARE = &H2000
-    GMEM_NOTIFY = &H4000
-    GMEM_LOWER = &H1000
-    GMEM_VALID_FLAGS = &H7F72
-    GMEM_INVALID_HANDLE = &H8000&
-    GHND = GMEM_MOVEABLE Or GMEM_ZEROINIT
-    GPTR = GMEM_FIXED Or GMEM_ZEROINIT
-    GMEM_DISCARDED = &H4000
-    GMEM_LOCKCOUNT = &H00FF
-End Enum
-Public Function GetXLString12(text As String) As XLOPER12
-    Dim text_len As Long = Len(text)
-    GetXLString12.xltype = xltypeStr
-       
-    Dim pStr As LongPtr = GlobalAlloc(GPTR, (text_len + 1) * 2) 'Excel frees it, that's why this trouble
-    ZeroMemory ByVal pStr, (text_len + 1) * 2
-    CopyMemory ByVal VarPtr(GetXLString12.val(0)), pStr, LenB(pStr)
-    CopyMemory ByVal pStr, CByte(text_len), 1
-    CopyMemory ByVal pStr + 2, ByVal StrPtr(text), (text_len) * 2
-End Function
-Public Function GetXLInt12(n As Long) As XLOPER12
-    GetXLInt12.xltype = xltypeInt
-    CopyMemory ByVal VarPtr(GetXLInt12.val(0)), n, LenB(Of Long)
-End Function
-Public Function GetXLNum12(n As Double) As XLOPER12
-    GetXLNum12.xltype = xltypeNum
-    CopyMemory ByVal VarPtr(GetXLNum12.val(0)), n, LenB(Of Double)
-End Function
-Public Function GetXLBool12(b As Boolean) As XLOPER12
-    GetXLBool12.xltype = xltypeBool
-    Dim bl As Long = If(b, 1&, 0&)
-    CopyMemory ByVal VarPtr(GetXLBool12.val(0)), b, 4
-End Function
-Public Function GetXLErr12(ByVal errnum As Long) As XLOPER12
-    GetXLErr12.xltype = xltypeErr
-    CopyMemory ByVal VarPtr(GetXLErr12.val(0)), errnum, LenB(Of Long)
-End Function
-Public Function GetXLMissing12() As XLOPER12
-    GetXLMissing12.xltype = xltypeMissing
-End Function
-        
-Public Function GetXLActiveRef12(ByVal rwFirst As Long, ByVal rwLast As Long, ByVal colFirst As Long, ByVal colLast As Long) As XLOPER12
-    Dim lpmref As LongPtr = cMemPool.Alloc(LenB(Of XLMREF12))
-    Dim wRet As Long
-    Dim dummy(0) As XLOPER12
-    wRet = Excel12v(xlSheetId, GetXLActiveRef12, 0, dummy)
-    If wRet <> xlretSuccess Then
-        Exit Function 'We can't return or check for null pointer, so the caller will have to check xlType <> 0
-    Else
-        GetXLActiveRef12.xltype = xltypeRef
-        CopyMemory ByVal VarPtr(GetXLActiveRef12.val(0)), lpmref, LenB(Of LongPtr)
-        With CType(Of XLMREF12)(lpmref)
-            .count = 1
-            .reftbl(0).rwFirst = rwFirst
-            .reftbl(0).rwLast = rwLast
-            .reftbl(0).colFirst = colFirst
-            .reftbl(0).colLast = colLast
-        End With
-    End If
-End Function
-    
-Public Function GetXLActiveRow12(ByVal rw As Long) As XLOPER12
-    Return GetXLActiveRef12(rw, rw, 0, &H00003FFF)
-End Function
-Public Function GetXLActiveColumn12(ByVal col As Long) As XLOPER12
-    Return GetXLActiveRef12(0, &H000FFFFF&, col, col)
-End Function
-Public Function GetXLActiveCell12(ByVal rw As Long, ByVal col As Long) As XLOPER12
-    Return GetXLActiveRef12(rw, rw, col, col)
-End Function
-
-Public Function Xloper12NumValue(x As XLOPER12) As Double
-    If x.xltype <> xltypeNum Then Exit Function
-    CopyMemory Xloper12NumValue, x.val(0), LenB(Of Double)
-End Function
-Public Function Xloper12IntValue(x As XLOPER12) As Long
-    If x.xltype <> xltypeInt Then Exit Function
-    CopyMemory Xloper12IntValue, x.val(0), LenB(Of Long)
-End Function
-Public Function Xloper12ErrValue(x As XLOPER12) As Long
-    If x.xltype <> xltypeErr Then Exit Function
-    CopyMemory Xloper12ErrValue, x.val(0), LenB(Of Long)
-End Function
-Public Function Xloper12BoolValue(x As XLOPER12) As Boolean
-    If x.xltype <> xltypeBool Then Exit Function
-    Dim b As Long
-    CopyMemory b, x.val(0), LenB(Of Long)
-    Return If(b, True, False)
-End Function
-Public Function Xloper12StrValue(x As XLOPER12) As String
-    If x.xltype <> xltypeStr Then Exit Function
-    Dim lp As LongPtr
-    CopyMemory lp, x.val(0), LenB(Of LongPtr)
-    If lp Then
-        SysReAllocStringW VarPtr(Xloper12StrValue), lp
-    End If
-End Function
-
 End Module
-
-[PredeclaredId]
-Class cMemPool
-    Private Declare PtrSafe Sub CopyMemory Lib "kernel32" Alias "RtlMoveMemory" (Destination As Any, Source As Any, ByVal Length As LongPtr)
-    Private Declare PtrSafe Function GlobalAlloc Lib "kernel32" (ByVal uFlags As GMEM, ByVal dwBytes As LongPtr) As LongPtr
-    Private Declare PtrSafe Function GlobalFree Lib "kernel32" (ByVal hMem As LongPtr) As LongPtr
-    Private Enum GMEM
-        GMEM_FIXED = &H0000
-        GMEM_MOVEABLE = &H0002
-        GMEM_NOCOMPACT = &H0010
-        GMEM_NODISCARD = &H0020
-        GMEM_ZEROINIT = &H0040
-        GMEM_MODIFY = &H0080
-        GMEM_DISCARDABLE = &H0100
-        GMEM_NOT_BANKED = &H1000
-        GMEM_SHARE = &H2000
-        GMEM_DDESHARE = &H2000
-        GMEM_NOTIFY = &H4000
-        GMEM_LOWER = &H1000
-        GMEM_VALID_FLAGS = &H7F72
-        GMEM_INVALID_HANDLE = &H8000&
-        GHND = GMEM_MOVEABLE Or GMEM_ZEROINIT
-        GPTR = GMEM_FIXED Or GMEM_ZEROINIT
-        GMEM_DISCARDED = &H4000
-        GMEM_LOCKCOUNT = &H00FF
-    End Enum
-    Private hMem As LongPtr
-    Private arMem() As Byte
-    Private Const MemSize = 10240
-    Private lOffset As LongPtr
-    Private Sub Class_Initialize()
-        ReDim arMem(MemSize - 1)
-        hMem = VarPtr(arMem(0))
-    End Sub
- 
-    Public Function Alloc(cb As LongPtr) As LongPtr
-        Alloc = hMem + cb
-        lOffset += cb
-    End Function
-End Class

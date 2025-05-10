@@ -1,0 +1,127 @@
+Module Decls
+
+  #If win64 Then
+    Public Const ptrSz = 8^
+  #Else
+    Public Const ptrSz = 4&
+  #End If
+  Public Type SAFEARRAYBOUND
+      cCount              As Long
+      lBound              As Long
+  End Type
+  Private Type SAFEARRAY1D
+      cDims               As Integer
+      fFeatures           As Integer
+      cbElements          As Long
+      cLocks              As Long
+  '  #If Win64 Then
+  '    padding      As Long
+  '  #End If
+      pvData              As LongPtr
+      Bounds              As SAFEARRAYBOUND
+  End Type
+  Public Type SAFEARRAY2D
+      cDims               As Integer
+      fFeatures           As Integer
+      cbElements          As Long
+      cLocks              As Long
+  '  #If Win64 Then
+  '    padding           As Long
+  '  #End If
+      pvData              As LongPtr
+      Bounds(1)           As SAFEARRAYBOUND
+  End Type
+  
+[UseGetLastError(False), DLLStackCheck(False)]
+DeclareWide PtrSafe Sub CopyMemory Lib "kernel32" Alias "RtlMoveMemory" (Destination As Any, Source As Any, ByVal Length As LongPtr)
+[UseGetLastError(False), DLLStackCheck(False)]
+DeclareWide PtrSafe Sub ZeroMemory Lib "kernel32" Alias "RtlZeroMemory" (Destination As Any, ByVal Length As LongPtr)
+[UseGetLastError(False), DLLStackCheck(False)]
+DeclareWide PtrSafe Function SysReAllocStringW Lib "oleaut32" Alias "SysReAllocString" (ByVal pBSTR As LongPtr, Optional ByVal pszStrPtr As LongPtr) As Long
+[UseGetLastError(False), DLLStackCheck(False)]
+DeclareWide PtrSafe Function GlobalAlloc Lib "kernel32" (ByVal uFlags As GMEM, ByVal dwBytes As LongPtr) As LongPtr
+[UseGetLastError(False), DLLStackCheck(False)]
+DeclareWide PtrSafe Function SysAllocStringLen Lib "OleAut32.dll" (ByVal pstrIn As LongPtr, ByVal ui As Long) As LongPtr
+[UseGetLastError(False), DLLStackCheck(False)]
+DeclareWide PtrSafe Function SysAllocStringLenS Lib "oleaut32" Alias "SysAllocStringLen" (ByVal Value As Any, ByVal Length As Long) As String
+[PreserveSig(False), UseGetLastError(False), DLLStackCheck(False)]
+DeclareWide PtrSafe Sub GetMem2_ Lib "<hiddenmodule>" Alias "#4" (Src As Any, Dst As Any)
+[PreserveSig(False), UseGetLastError(False), DLLStackCheck(False)]
+DeclareWide PtrSafe Sub GetMem4_ Lib "<hiddenmodule>" Alias "#5" (Src As Any, Dst As Any)
+[PreserveSig(False), UseGetLastError(False), DLLStackCheck(False)]
+DeclareWide PtrSafe Sub GetMem8_ Lib "<hiddenmodule>" Alias "#6" (Src As Any, Dst As Any)
+[PreserveSig(False), UseGetLastError(False), DLLStackCheck(False)]
+DeclareWide PtrSafe Sub GetMemPtr_ Lib "<hiddenmodule>" Alias "#7" (Src As Any, Dst As Any)
+[PreserveSig(False), UseGetLastError(False), DLLStackCheck(False)]
+DeclareWide PtrSafe Sub PutMem2_ Lib "<hiddenmodule>" Alias "#9" (Dst As Any, ByVal value As Any)
+[PreserveSig(False), UseGetLastError(False), DLLStackCheck(False)]
+DeclareWide PtrSafe Sub PutMem4_ Lib "<hiddenmodule>" Alias "#10" (Dst As Any, ByVal value As Long)
+[PreserveSig(False), UseGetLastError(False), DLLStackCheck(False)]
+DeclareWide PtrSafe Sub PutMemPtr_ Lib "<hiddenmodule>" Alias "#12" (Dst As Any, ByVal value As LongPtr)
+
+[UseGetLastError(False), DLLStackCheck(False)]
+DeclareWide PtrSafe Property Let PutLng Lib "<hiddenmodule>" Alias "#10" (Dst As Any, ByVal lVal As Long)           'Alias PutMem4
+[UseGetLastError(False), DLLStackCheck(False)]
+DeclareWide PtrSafe Property Let PutPtr Lib "<hiddenmodule>" Alias "#12" (Dst As Any, ByVal pVal As LongPtr)
+
+[PreserveSig(False), UseGetLastError(False), DLLStackCheck(False)]
+DeclareWide PtrSafe Function GetLng Lib "<hiddenmodule>" Alias "#5" (Src As Any) As Long            'Alias GetMem4
+[PreserveSig(False), UseGetLastError(False), DLLStackCheck(False)]
+DeclareWide PtrSafe Function GetDbl Lib "<hiddenmodule>" Alias "#6" (Src As Any) As Double            'Alias GetMem4
+[PreserveSig(False), UseGetLastError(False), DLLStackCheck(False)]
+DeclareWide PtrSafe Function GetPtr Lib "<hiddenmodule>" Alias "#7" (Src As Any) As LongPtr
+
+[UseGetLastError(False), DLLStackCheck(False)]
+Declare PtrSafe Function GetModuleHandleW Lib "kernel32" (Optional ByVal lpModuleName As LongPtr) As LongPtr
+[UseGetLastError(False), DLLStackCheck(False)]
+Declare PtrSafe Function GetProcAddress Lib "kernel32" (ByVal hModule As LongPtr, ByVal lpProcName As String) As LongPtr
+
+Public Enum GMEM
+    GMEM_FIXED = &H0000
+    GMEM_MOVEABLE = &H0002
+    GMEM_NOCOMPACT = &H0010
+    GMEM_NODISCARD = &H0020
+    GMEM_ZEROINIT = &H0040
+    GMEM_MODIFY = &H0080
+    GMEM_DISCARDABLE = &H0100
+    GMEM_NOT_BANKED = &H1000
+    GMEM_SHARE = &H2000
+    GMEM_DDESHARE = &H2000
+    GMEM_NOTIFY = &H4000
+    GMEM_LOWER = &H1000
+    GMEM_VALID_FLAGS = &H7F72
+    GMEM_INVALID_HANDLE = &H8000&
+    GHND = GMEM_MOVEABLE Or GMEM_ZEROINIT
+    GPTR = GMEM_FIXED Or GMEM_ZEROINIT
+    GMEM_DISCARDED = &H4000
+    GMEM_LOCKCOUNT = &H00FF
+End Enum
+Private Type tVarStr
+    vt As Integer
+    iunuse As Integer
+    lunuse  As Long
+    str As String
+    lpunuse As LongPtr
+End Type
+Private Sub Test_ParamArray()
+    ' pTestParamArray = CType(Of TestParamArrayDeleg)(AddressOf TestParamArray_)
+    PutPtr(pTestParamArray) = AddressOf TestParamArray
+    Dim s As Variant = "sasdfdsa"
+    Debug.Print StrPtr(s)
+    pTestParamArray (s), "lkjljlkl" , "poippi"
+End Sub
+Private Delegate Sub TestParamArrayDeleg (ParamArray args() As Variant)
+Private pTestParamArray As TestParamArrayDeleg
+Private Sub TestParamArray(args() As tVarStr)
+    Debug.Print StrPtr(args(0).str)
+End Sub
+Private Sub TestSysAllocStringLen()
+    Dim sTmp As String, s2 As String
+    
+    sTmp = "dsfafasfff"
+    ' s2 = SysAllocStringLenS(sTmp, Len(sTmp))
+    PutMemPtr_ s2, SysAllocStringLen(StrPtr(sTmp), Len(sTmp))
+    ' CopyMemory ByVal VarPtr(s2), SysAllocStringLen (StrPtr(sTmp), Len(sTmp)), ptrSz
+    ' s2
+End Sub
+End Module
