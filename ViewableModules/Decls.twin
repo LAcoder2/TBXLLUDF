@@ -31,9 +31,21 @@ Module Decls
       pvData              As LongPtr
       Bounds(1)           As SAFEARRAYBOUND
   End Type
-  
+' typedef struct _SECURITY_ATTRIBUTES {
+'   DWORD  nLength;
+'   LPVOID lpSecurityDescriptor;
+'   BOOL   bInheritHandle;
+' } SECURITY_ATTRIBUTES, *PSECURITY_ATTRIBUTES, *LPSECURITY_ATTRIBUTES;
+Public Type SECURITY_ATTRIBUTES
+    nLength As Long
+    lpSecurityDescriptor As LongPtr
+    bInheritHandle As BOOL
+End Type
 [UseGetLastError(False), DLLStackCheck(False)]
-DeclareWide PtrSafe Sub CopyMemory Lib "kernel32" Alias "RtlMoveMemory" (Destination As Any, Source As Any, ByVal Length As LongPtr)
+DeclareWide PtrSafe Sub CopyMemory Lib "kernel32" Alias "RtlMoveMemory" (Dst As Any, Src As Any, ByVal Ln As LongPtr)
+[UseGetLastError(False), DLLStackCheck(False)]
+DeclareWide PtrSafe Sub Copy32 Lib "kernel32" Alias "RtlMoveMemory" (Dst As Any, Src As Any, Optional ByVal Ln As LongPtr = 32)
+
 [UseGetLastError(False), DLLStackCheck(False)]
 DeclareWide PtrSafe Sub ZeroMemory Lib "kernel32" Alias "RtlZeroMemory" (Destination As Any, ByVal Length As LongPtr)
 [UseGetLastError(False), DLLStackCheck(False)]
@@ -63,18 +75,76 @@ DeclareWide PtrSafe Sub PutMemPtr_ Lib "<hiddenmodule>" Alias "#12" (Dst As Any,
 DeclareWide PtrSafe Property Let PutLng Lib "<hiddenmodule>" Alias "#10" (Dst As Any, ByVal lVal As Long)           'Alias PutMem4
 [UseGetLastError(False), DLLStackCheck(False)]
 DeclareWide PtrSafe Property Let PutPtr Lib "<hiddenmodule>" Alias "#12" (Dst As Any, ByVal pVal As LongPtr)
-
+[UseGetLastError(False), DLLStackCheck(False), _
+    Description("Скопировать значение double (dbVal) в Dst")]
+DeclareWide PtrSafe Property Let PutDbl Lib "<hiddenmodule>" Alias "#11" (Dst As Any, ByVal dbVal As Double)
 [PreserveSig(False), UseGetLastError(False), DLLStackCheck(False)]
 DeclareWide PtrSafe Function GetLng Lib "<hiddenmodule>" Alias "#5" (Src As Any) As Long            'Alias GetMem4
 [PreserveSig(False), UseGetLastError(False), DLLStackCheck(False)]
 DeclareWide PtrSafe Function GetDbl Lib "<hiddenmodule>" Alias "#6" (Src As Any) As Double            'Alias GetMem4
 [PreserveSig(False), UseGetLastError(False), DLLStackCheck(False)]
 DeclareWide PtrSafe Function GetPtr Lib "<hiddenmodule>" Alias "#7" (Src As Any) As LongPtr
+[PreserveSig(False), UseGetLastError(False), DLLStackCheck(False)]
+DeclareWide PtrSafe Function GetSA Lib "<hiddenmodule>" Alias "#7" (Src() As Any) As LongPtr
+
+[PreserveSig(True), UseGetLastError(False), DLLStackCheck(False)]
+Public DeclareWide PtrSafe Sub MovePtr Lib "<hiddenmodule>" Alias "#116" (dst As Any, src As Any)
 
 [UseGetLastError(False), DLLStackCheck(False)]
 Declare PtrSafe Function GetModuleHandleW Lib "kernel32" (Optional ByVal lpModuleName As LongPtr) As LongPtr
 [UseGetLastError(False), DLLStackCheck(False)]
 Declare PtrSafe Function GetProcAddress Lib "kernel32" (ByVal hModule As LongPtr, ByVal lpProcName As String) As LongPtr
+[UseGetLastError(False), DLLStackCheck(False)]
+Declare PtrSafe Sub Sleep Lib "kernel32.dll" (ByVal dwMilliseconds As Long)
+' HANDLE CreateThread(
+' [in, optional]  LPSECURITY_ATTRIBUTES   lpThreadAttributes,
+' [in]            SIZE_T                  dwStackSize,
+' [in]            LPTHREAD_START_ROUTINE  lpStartAddress,
+' [in, optional]  __drv_aliasesMem LPVOID lpParameter,
+' [in]            DWORD                   dwCreationFlags,
+' [out, optional] LPDWORD                 lpThreadId
+' );
+' DeclareWide PtrSafe Function CreateThread Lib "kernel32.dll" ( _
+'             lpThreadAttributes As SECURITY_ATTRIBUTES, _
+'       ByVal dwStackSize As LongPtr, _
+'             lpStartAddress As LongPtr, _
+'             lpParameter As Any, _
+'       ByVal dwCreationFlags As Long, _
+'             lpThreadId As Long) As Long
+' DeclareWide PtrSafe Function CreateThread Lib "kernel32.dll" ( _ /*!!!!!!!!!!!!!!*/
+'       ByVal lpThreadAttributes As LongPtr, _
+'       ByVal dwStackSize As LongPtr, _
+'             lpStartAddress As LongPtr, _
+'             lpParameter As Any, _
+'       ByVal dwCreationFlags As Long, _
+'             lpThreadId As Long) As LongPtr
+' Private Declare Function CreateThread2 Lib "kernel32.dll" ( _
+'             lpThreadAttributes As SECURITY_ATTRIBUTES, _
+'     ByVal dwStackSize As Long, _
+'             lpStartAddress As Long, _
+'             lpParameter As Any, _
+'     ByVal dwCreationFlags As Long, _
+'             lpThreadId As Long) As Long
+' Private Declare PtrSafe Function CreateThread3 Lib "kernel32" ( _
+'             lpThreadAttributes As Any, _
+'       ByVal dwStackSize As LongPtr, _
+'       ByVal lpStartAddress As LongPtr, _
+'             lpParameter As Any, _
+'       ByVal dwCreationFlags As LongPtr, _
+'             lpThreadID As LongPtr) As LongPtr
+' void ExitThread([in] DWORD dwExitCode);
+Declare PtrSafe Function CreateThread Lib "kernel32" ( _
+            ByRef lpThreadAttributes As Any, _
+            ByVal dwStackSize As Long, _
+            ByVal lpStartAddress As LongPtr, _
+            ByRef lpParameter As Any, _
+            ByVal dwCreationFlags As Long, _
+            ByRef lpThreadId As Long) As LongPtr
+
+Declare PtrSafe Function WaitForSingleObject Lib "kernel32" ( _
+            ByVal hHandle As LongPtr, _
+            ByVal dwMilliseconds As Long) As Long
+Declare PtrSafe Sub ExitThread Lib "kernel32.dll" (Optional ByVal dwExitCode As Long)
 
 Public Enum GMEM
     GMEM_FIXED = &H0000
@@ -103,6 +173,14 @@ Private Type tVarStr
     str As String
     lpunuse As LongPtr
 End Type
+Private Sub jumpToHiddenModule()
+    PutMemPtr 0, 0
+End Sub
+Private Sub TestPutDbl()
+    Dim d1&, d2#
+    d1 = 54654
+    PutDbl(d2) = d1
+End Sub
 Private Sub Test_ParamArray()
     ' pTestParamArray = CType(Of TestParamArrayDeleg)(AddressOf TestParamArray_)
     PutPtr(pTestParamArray) = AddressOf TestParamArray
